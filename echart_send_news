@@ -1,0 +1,91 @@
+from win32com.client import DispatchEx
+from PIL import ImageGrab
+import os
+from os import remove
+import itchat
+from itchat import auto_login
+from datetime import datetime
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+import pythoncom
+import time
+
+
+def task():
+    pythoncom.CoInitialize()
+    global fat, faf, i, chat_rooms
+    try:
+        pwd = os.getcwd()
+        name = "ky.xls"
+        pathone = pwd + "\\" + name
+        thour = datetime.now().hour
+        excel = DispatchEx("Excel.Application")
+        excel.Visible = False
+        excel.DisplayAlerts = 0
+        wb = excel.Workbooks.open(pathone)
+        wb.RunAutoMacros(1)
+        wb.Application.Run("EnableTimer")
+        print("（一）:数据更新结束")
+        ws = wb.Worksheets("报表")
+        body = ws.Cells(20, 2).Value
+        if i == 0:
+            qun = ws.Cells(27, 3).Value
+            fat = ws.cells(28, 3).Value
+            faf = ws.cells(29, 3).Value
+        sales = ws.Cells(13, 5).Value
+        print(body)
+        ws = wb.Worksheets("报表")
+        if thour >= 10:
+            ws.Range("B2:M13").Copy()
+        else:
+            ws.Range("O2:AA13").Copy()
+        img = ImageGrab.grabclipboard()
+        f = pwd + "\\" + "zb.png"
+        img.save(f)
+        if sales > 0:
+            wb.Application.Run("minxi")
+            ws2 = wb.Worksheets("today")
+            info = ws2.UsedRange
+            nrows = info.Rows.Count
+            ws2.Range("B2:F" + str(nrows)).Copy()
+            img2 = ImageGrab.grabclipboard()
+            g = pwd + "\\" + "td.png"
+            img2.save(g)
+        print("（二）:数据生成成功")
+        wb.Save()
+        wb.Close(False)
+        excel.Quit()
+    finally:
+        if excel:
+            excel.Quit()
+    # 发送微信
+    if i == 0:
+        chat_rooms = itchat.search_chatrooms(name=qun)
+        i += 1
+    if len(chat_rooms) > 0:
+        itchat.send_msg(body, chat_rooms[0]["UserName"])
+        itchat.send_image(f, chat_rooms[0]["UserName"])
+        remove(f)
+        if sales > 0:
+            itchat.send_image(g, chat_rooms[0]["UserName"])
+            remove(g)
+        print("今天第%s次微信发送！GOOD LUCK! 请不要关闭本窗口" % i)
+        print("本次发送时间: %s，我要去睡觉了，一会再发消息" % datetime.now())
+        print("\n")
+    else:
+        print("登录失败，或你的微信里没有%s群：请检查网络和微信群！" % qun)
+    i += 1
+    pythoncom.CoUninitialize()
+
+
+if __name__ == "__main__":
+    i = 0
+    print("程序启动：开始运行,请稍等一会儿！")
+    auto_login(hotReload=True)
+    task()
+    trigger1 = CronTrigger(hour=fat, minute=faf)
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(task, trigger=trigger1, max_instances=10)
+    scheduler.start()
+    while True:
+        time.sleep(1800)
